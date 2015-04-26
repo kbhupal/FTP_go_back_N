@@ -56,7 +56,7 @@ piped_packet = 0
 ACK = 0
 
 # The RTT for the packets in seconds
-RTT = 3
+RTT = 1
 
 # Completion notifier
 completed = False
@@ -167,13 +167,12 @@ def acknowledgement_handler():
     ack_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     ack_sock.bind((ACK_HOST, ACK_PORT))
     # Listen forever, until the final ACK is received
-    print("Starting listening for ACK packets on", ACK_HOST, ACK_PORT)
     while True:
         # Receive a ACK message from the server
         server_message = ack_sock.recv(65535)
-        print("server message", server_message)
+        # print("server message", server_message)
         fields = pickle.loads(server_message)
-        print("ACK", fields)
+        # print("ACK", fields)
 
         # Check if the type of message is ACK
         if fields[2] == TYPE_ACK:
