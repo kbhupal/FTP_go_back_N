@@ -28,7 +28,8 @@ def send_acknowledgement(ack_packet, host):
     print("Sending ACK", ack_packet, "to", host, ACK_PORT)
     # Create a UDP socket for acknowledgement passing
     ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    ack_socket.sendto(pickle.dumps(ack_packet), (host, ACK_PORT))
+    print("B", pickle.loads(pickle.dumps(ack_packet)))
+    ack_socket.sendto(ack_packet, (hostname, ACK_PORT))
     ack_socket.close()
 
 
@@ -38,7 +39,7 @@ def compute_checksum(data):
 
 
 # Get the hostname and the port
-hostname = socket.gethostbyname(socket.gethostname())
+hostname = socket.gethostname()
 
 # Create a UDP Socket and bind
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

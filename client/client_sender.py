@@ -170,7 +170,8 @@ def acknowledgement_handler():
     print("Starting listening for ACK packets on", ACK_HOST, ACK_PORT)
     while True:
         # Receive a ACK message from the server
-        server_message = ack_sock.recv(512)
+        server_message = ack_sock.recv(65535)
+        print("server message", server_message)
         fields = pickle.loads(server_message)
         print("ACK", fields)
 
