@@ -10,10 +10,12 @@ from collections import namedtuple
 command_args = sys.argv
 # TODO: Uncomment to read from the command lines args
 # Get the server hostnames and port
-# server_hostname = command_args[1]
-SERVER_HOST = socket.gethostbyname(socket.gethostname())
-# server_port = command_args[2]
-SERVER_PORT = 7736
+SERVER_HOST = command_args[1]
+# SERVER_HOST = socket.gethostbyname(socket.gethostname())
+SERVER_PORT = int(command_args[2])
+# SERVER_PORT = 7736
+file_location = command_args[3]
+
 
 # Acknowledgement server hostname and port
 ACK_HOST = socket.gethostname()
@@ -21,16 +23,16 @@ ACK_PORT = 10000
 
 # Filename
 # file_location = command_args[3]
-file_location = "/home/falcon/helloworld.txt"
+# file_location = "E:\rfc\rfc951.txt"
 # file_location = "D:/image.jpg"
 
 # Window Size N
-# N = command_args[4]
-N = 5
+N = int(command_args[4])
+# N = 5
 
 # MSS
-# MSS = command_args[5]
-MSS = 5
+MSS = int(command_args[5])
+# MSS = 5
 
 # Types of packets
 TYPE_DATA = "0101010101010101"
@@ -56,20 +58,31 @@ piped_packet = 0
 ACK = 0
 
 # The RTT for the packets in seconds
-RTT = 1
+RTT = 0.1
 
 # Completion notifier
 completed = False
 
 
+# checksum addition with carry bit
+def carry_around_addition(num_1, num_2):
+    c = num_1 + num_2
+    return (c & 0xffff) + (c >> 16)
+
+
 # Compute the checksum for a given data element
 def compute_checksum(data):
-    return 0xfff
+    checksum = 0
+    for i in range(0, len(data), 2):
+        my_message = str(data)
+        w = ord(my_message[i]) + (ord(my_message[i+1]) << 8)
+        checksum = carry_around_addition(checksum, w)
+    return (not checksum) & 0xffff
 
 
 # Send a packet by sequence number
 def send_packet(sequence_number):
-    print("Sending packet =", sequence_number)
+    # print("Sending packet =", sequence_number, SERVER_HOST, SERVER_PORT)
 
     # Send the packet with the given sequence number to the server
     client_socket.sendto(preprocessed_packet_data[sequence_number], (SERVER_HOST, SERVER_PORT))
@@ -137,6 +150,7 @@ def read_data(filename):
             # If the content is not empty, append to the mss_array
             if mss_bytes:
                 mss_array.append(mss_bytes)
+                # print("data", mss_bytes)
             else:
                 break
 
@@ -160,7 +174,7 @@ def rdt_send(client_socket):
 
 # Acknowledgement handler thread, since we cannot have a synchronous packet sending and ack receiving mechanism
 def acknowledgement_handler():
-    print("acknowledgement_handler started")
+    # print("acknowledgement_handler started")
     global window_ceil, window_floor, packets_length, piped_packet, ACK, completed
 
     # Create a UDP server socket to listen for ACKs from the FTP server
@@ -179,19 +193,25 @@ def acknowledgement_handler():
             # Get the ACK number from fields[0]
             ACK = fields[0]
             # If ACK is a valid field
-            if ACK:
+            # print("ack num:", ACK)
+            if ACK > -1:
                 # synchronize
                 thread_lock.acquire()
 
                 # If received ACK is higher than the number of packets, implies all transferred
                 if ACK == packets_length:
-                    print("All packets sent!")
+                    # print("if 1")
+                    eof_pkt_list = ["0", "0", TYPE_EOF, "0"]
+                    eof_pkt = pickle.dumps(eof_pkt_list)
+                    client_socket.sendto(eof_pkt, (SERVER_HOST, SERVER_PORT))    
+                    # print("All packets sent!")
                     thread_lock.release()
                     completed = True
                     break
 
                 # Check the ACK limits
                 elif packets_length > ACK >= window_floor:
+                    # print("if 2")
                     # Reset the timer
                     signal.alarm(0)
                     signal.setitimer(signal.ITIMER_REAL, RTT)
@@ -199,19 +219,23 @@ def acknowledgement_handler():
                     # Number of ACKed packets
                     number_of_acked = ACK - window_floor
                     window_floor = ACK
-
+                    # print("num of ack ", number_of_acked)
                     # Update the window ceiling
                     outdate_ceil = window_ceil
-                    window_ceil = min(window_ceil + number_of_acked, packets_length - 1)
-
+                    window_ceil = min(window_ceil + number_of_acked, packets_length)
+                    # print("if 2a ", window_floor, outdate_ceil, window_ceil, piped_packet)
                     # Send out new packets that have seq number between old_ceil and new window_ceil
                     # Using window_ceil - outdate_ceil because the number_of_acked doesn't always give the right remaining packets
                     for i in range(window_ceil - outdate_ceil):
+                        # print("piped", piped_packet)
                         send_packet(piped_packet)
                         if piped_packet < packets_length - 1:
                             piped_packet += 1
 
                     thread_lock.release()
+
+                # else:
+                    # print("if 3", packets_length, ACK, window_floor)
 
 
 # Create a UDP client socket
@@ -227,7 +251,7 @@ preprocessed_packet_data = preprocess(mss_byte_array)
 
 # Get the length of the number of packets
 packets_length = len(preprocessed_packet_data)
-
+# print("pkt length", packets_length)
 # Update the upper window limit, incase the length of packets is less that the provided window size
 window_ceil = min(N, packets_length) - 1
 
